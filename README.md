@@ -1,6 +1,6 @@
 # Nextcloud and Vaultwarden with Traefik
 
-This is a straightforward docker-compose file for setting up Nextcloud and Vaultwarden using Traefik as a reverse proxy.
+This is a straightforward docker-compose file for setting up Nextcloud, Vaultwarden and your custom Blog using Traefik as a reverse proxy.
 
 ## Requirements
 
@@ -10,9 +10,10 @@ This is a straightforward docker-compose file for setting up Nextcloud and Vault
 ## Quickstart
 
 1. Update the email address in the docker-compose file.
-2. Modify the subdomain names and domain names for Nextcloud, Vaultwarden, and the blog in the docker-compose file.
+2. Update the domain name for Nextcloud, Vaultwarden, and Blog in the docker-compose file.
 3. Update the database passwords (`MYSQL_PASSWORD` and `MYSQL_ROOT_PASSWORD`) in the docker-compose file.
-4. Run the following command to start the services:
+4. Create the `data/blog` folder and add your custom website or blog static files, for example, using [Hugo](https://gohugo.io/).
+5. Run the following command to start the services:
    ```bash
    docker-compose up -d
    ```
