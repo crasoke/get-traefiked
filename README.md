@@ -25,4 +25,4 @@ This is a straightforward docker-compose file for setting up Nextcloud and Vault
 
 - Consider disabling signups in Vaultwarden after creating your account by setting `"signups_allowed": false` in the `data/vaultwarden/config.json`.
 
-- It's also recommended to install a Web Application Firewall (WAF) to enhance security. [Learn more about enhancing Docker Compose security with CrowdSec here](https://www.crowdsec.net/blog/enhance-docker-compose-security).
+- Additionally, installing a log analyzer is recommended to enhance security. [Learn more about enhancing security with CrowdSec here](https://www.crowdsec.net/blog/enhance-docker-compose-security).
