@@ -1,0 +1,145 @@
+services:
+############################## reverse proxy ##############################
+  traefik:
+    image: traefik:latest
+    container_name: traefik
+    depends_on: 
+      - crowdsec
+    command:
+      # - "--log.level=DEBUG"
+      - "--accesslog=true"
+      - "--accesslog.filepath=/var/log/traefik/access.log"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entryPoints.web.address=:80"
+      - "--entryPoints.websecure.address=:443"
+      - "--certificatesresolvers.myresolver.acme.httpchallenge=true"
+      - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
+      # - "--certificatesresolvers.myresolver.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory"
+      - "--certificatesresolvers.myresolver.acme.email=${EMAIL}"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+      - "--experimental.plugins.crowdsec-bouncer.modulename=github.com/maxlerebourg/crowdsec-bouncer-traefik-plugin"
+      - "--experimental.plugins.crowdsec-bouncer.version=v1.3.1"
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - ./data/traefik/letsencrypt:/letsencrypt
+      - ./data/traefik/log:/var/log/traefik
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+############################## blog ##############################
+  blog:
+    image: nginx:latest
+    container_name: blog
+    restart: unless-stopped
+    volumes:
+      - ./data/blog:/usr/share/nginx/html
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.blog.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.blog.entrypoints=websecure"
+      - "traefik.http.routers.blog.tls.certresolver=myresolver"
+      - "traefik.http.routers.blog.middlewares=crowdsec@docker"
+
+############################## bitwarden ##############################
+  vaultwarden:
+    image: vaultwarden/server:latest
+    container_name: vaultwarden
+    restart: unless-stopped
+    volumes:
+      - ./data/vaultwarden:/data
+    environment:
+      - ADMIN_TOKEN=${VAULTWARDEN_ADMIN_PASSWORD}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.vaultwarden.rule=Host(`bitwarden.${DOMAIN}`)"
+      - "traefik.http.routers.vaultwarden.entrypoints=websecure"
+      - "traefik.http.routers.vaultwarden.tls.certresolver=myresolver"
+      - "traefik.http.routers.vaultwarden.middlewares=crowdsec@docker"
+      - "traefik.http.routers.vaultwarden-admin.rule=Host(`bitwarden.${DOMAIN}`) && PathPrefix(`/admin`)"
+      - "traefik.http.routers.vaultwarden-admin.entrypoints=websecure"
+      - "traefik.http.routers.vaultwarden-admin.tls.certresolver=myresolver"
+      - "traefik.http.routers.vaultwarden-admin.middlewares=local@docker"
+  
+############################## nextcloud ##############################
+  mariadb:
+    image: mariadb:10.6
+    container_name: mariadb
+    command: --transaction-isolation=READ-COMMITTED --log-bin=binlog --binlog-format=ROW
+    restart: unless-stopped
+    volumes:
+      - ./data/nextcloud/db:/var/lib/mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_DATABASE=nextcloud
+      - MYSQL_USER=nextcloud
+
+  redis:
+    image: redis:alpine
+    container_name: redis
+    restart: unless-stopped
+
+  nextcloud:
+    image: nextcloud:latest
+    container_name: nextcloud
+    restart: unless-stopped
+    volumes:
+      - ./data/nextcloud/cloud:/var/www/html
+    environment:
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_DATABASE=nextcloud
+      - MYSQL_USER=nextcloud
+      - MYSQL_HOST=mariadb
+      - REDIS_HOST=redis
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.nextcloud.rule=Host(`cloud.${DOMAIN}`)"
+      - "traefik.http.routers.nextcloud.entrypoints=websecure"
+      - "traefik.http.routers.nextcloud.tls.certresolver=myresolver"
+      - "traefik.http.middlewares.crowdsec.plugin.crowdsec-bouncer.enabled=true"
+      - "traefik.http.middlewares.crowdsec.plugin.crowdsec-bouncer.crowdseclapikey=${CROWDSEC_LAPI_KEY}"
+      - "traefik.http.routers.nextcloud.middlewares=crowdsec@docker"
+
+############################## wireguard ##############################
+  wg-easy:
+    image: weejewel/wg-easy
+    container_name: wg-easy
+    restart: unless-stopped
+    environment:
+      - WG_HOST=wg.${DOMAIN}
+      - PASSWORD=${WG_PASSWORD}
+    volumes:
+      - ./data/wireguard:/etc/wireguard
+    ports:
+      - 51820:51820/udp
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    sysctls:
+      - net.ipv4.ip_forward=1
+      - net.ipv4.conf.all.src_valid_mark=1
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.wg.rule=Host(`wg.${DOMAIN}`)"
+      - "traefik.http.routers.wg.entrypoints=websecure"
+      - "traefik.http.routers.wg.tls.certresolver=myresolver"
+      - "traefik.http.services.wg.loadbalancer.server.port=51821"
+      - "traefik.http.middlewares.local.ipallowlist.sourcerange=${IPALLOWLIST}"
+      - "traefik.http.routers.wg.middlewares=local@docker"
+
+############################## crowdsec ##############################
+  crowdsec:
+    image: crowdsecurity/crowdsec
+    container_name: crowdsec
+    restart: unless-stopped
+    environment:
+      - COLLECTIONS=crowdsecurity/traefik crowdsecurity/http-cve
+      - ENROLL_KEY=${CROWDSEC_ENROLL_KEY}
+      - BOUNCER_KEY_traefikBouncer=${CROWDSEC_LAPI_KEY}
+    volumes:
+      - ./data/traefik/log:/var/log/traefik:ro
+      - ./data/crowdsec/db:/var/lib/crowdsec/data
+      - ./data/crowdsec/config:/etc/crowdsec
+      - ./data/crowdsec/acquis.d:/etc/crowdsec/acquis.d
