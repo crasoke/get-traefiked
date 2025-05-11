@@ -1,0 +1,19 @@
+############################## openproject ##############################
+  openproject:
+    image: openproject/openproject:14
+    container_name: openproject
+    restart: unless-stopped
+    environment:
+      -  OPENPROJECT_HOST__NAME=openproject.${DOMAIN}
+      -  OPENPROJECT_SECRET_KEY_BASE=${OPENPROJECT_SECRET_KEY_BASE}
+    volumes:
+      - ./data/openproject/pgdata:/var/openproject/pgdata
+      - ./data/openproject/assets:/var/openproject/assets
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.openproject.rule=Host(`openproject.${DOMAIN}`)"
+      - "traefik.http.routers.openproject.entrypoints=websecure"
+      - "traefik.http.routers.openproject.tls.certresolver=myresolver"
+      - "traefik.http.services.openproject.loadbalancer.server.port=8080"
+      # - "traefik.http.routers.openproject.middlewares=local@docker"
+      - "traefik.http.routers.openproject.middlewares=crowdsec@docker"

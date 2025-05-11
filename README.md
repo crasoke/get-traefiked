@@ -1,21 +1,42 @@
-# Set Up Nextcloud, Vaultwarden, Wireguard, Blog, Crowdsec with Traefik reverse proxy
+# Get TRAEFIKed
 
-This project provides straightforward `docker-compose` files for setting up:
+This project provides a `docker-compose` file for setting up a server with:
 
-1. [Nextcloud](https://nextcloud.com/), [Vaultwarden](https://github.com/dani-garcia/vaultwarden), [Wireguard](https://github.com/wg-easy/wg-easy), [Crowdsec](https://www.crowdsec.net/), and your custom Blog.
-2. [Nextcloud](https://nextcloud.com/), [Vaultwarden](https://github.com/dani-garcia/vaultwarden), [Wireguard](https://github.com/wg-easy/wg-easy), and your custom Blog.
+- [Nextcloud](https://nextcloud.com/)
+- [Vaultwarden](https://github.com/dani-garcia/vaultwarden)
+- [Wireguard](https://github.com/wg-easy/wg-easy)
+- your custom Blog, for example, using [Hugo](https://gohugo.io/)
 
-These setups use [Traefik](https://traefik.io/) as a reverse proxy.
+All those services are behind a [Traefik](https://traefik.io/) reverse proxy, as well as all public accessible sites are using [Crowdsec](https://www.crowdsec.net/) as IPS system.
 
 ## Requirements
 
 - Docker
 - Docker Compose
 
-## Quickstart Default (With Crowdsec)
+## Quickstart
 
-1. Create a [Crowdsec](https://www.crowdsec.net/) account and go to the [console](https://app.crowdsec.net). Copy the enroll key and insert it into the [.env](.env) file.
-2. Fill in the rest of the information in the [.env](.env) file. An example is provided in the [.env.example](.env.example) file:
+1. Insert the necessary A Records in your Domain DNS configuration ([more information](https://www.cloudflare.com/learning/dns/dns-records/dns-a-record/))
+   - for example:
+
+| Subdomain               | Record Type | Value       | TTL   |
+|-------------------------|-------------|-------------|-------|
+| @ (example.com)         | A           | 8.8.8.8     | 14400 |
+| cloud.example.com       | A           | 8.8.8.8     | 14400 |
+| bitwarden.example.com   | A           | 8.8.8.8     | 14400 |
+| wg.example.com          | A           | 8.8.8.8     | 14400 |
+2. Create a [Crowdsec](https://www.crowdsec.net/) account 
+3. Log into the [Crowdsec console](https://app.crowdsec.net), copy the [enrollment key](https://docs.crowdsec.net/u/getting_started/post_installation/console/#engines-page) and insert it into the [.env](.env) file (`CROWDSEC_ENROLL_KEY=...`).
+4. Now generate the crowdsec API key for the LAPI. ([more info](https://plugins.traefik.io/plugins/6335346ca4caa9ddeffda116/crowdsec-bouncer-traefik-plugin))
+   ```bash
+   docker compose up -d crowdsec
+   docker exec crowdsec cscli bouncers add crowdsecBouncer
+   docker compose down crowdsec
+   ```
+   Insert the generated key into the [.env](.env) file (`CROWDSEC_LAPI_KEY=...`).
+
+
+4. Fill in the rest of the information in the [.env](.env) file. An example is provided in the [.env.example](.env.example) file (consider adding your public IP to the IPALLOWLIST for setting up):
    ```bash
    EMAIL=max.mustermann@example.com
    DOMAIN=example.com
@@ -27,30 +48,38 @@ These setups use [Traefik](https://traefik.io/) as a reverse proxy.
    CROWDSEC_LAPI_KEY=2abpGRXqQnq8KSaHgfFtdV/CnVVvWmU8cCZ2CDhgJZH
    CROWDSEC_ENROLL_KEY=gxyc3igakixgge23ei3bo4f6i
    ```
-3. Insert your custom static blog/website in the [blog](data/blog/) folder, for example, using [Hugo](https://gohugo.io/).
-4. Run the following command to start the services:
+5. Insert your custom static blog/website in the [blog](data/blog/) folder, for example, using [Hugo](https://gohugo.io/).
+6. Run the following command to start the services:
    ```bash
    docker-compose up -d
    ```
 
-## Quickstart (Without Crowdsec)
+## Subdomain Map
 
-1. cd into the [without-crowdsec](without-crowdsec/) folder.
-2. Fill in the information in the [.env](without-crowdsec/.env) file. An example is provided in the [.env.example](without-crowdsec/.env.example) file.
-3. Insert your custom static blog/website in the [blog](without-crowdsec/data/blog/) folder, for example, using [Hugo](https://gohugo.io/).
-4. Run the following command in the [without-crowdsec](without-crowdsec/) folder to start the services:
-   ```bash
-   docker-compose up -d
-   ```
+- running the compose file, will spin up the following subdomains
+
+| Subdomain                        | Service                   | Externally Reachable                                                   |
+|----------------------------------|---------------------------|------------------------------------------------------------------------|
+| `cloud.<your domain>`            | Nextcloud                 | No (except shared links via `/s/`)                                     |
+| `bitwarden.<your domain>`        | Vaultwarden (Bitwarden)   | Yes (except admin interface at `/admin`)                               |
+| `wg.<your domain>`               | WireGuard VPN             | No (web interface not reachable, but VPN port is exposed externally)   |
+| `<your domain>`                  | Blog                      | Yes                                                                    |
+
+## Services
+
+- besides the services in the `docker-compose` file, the project has the file [examples.yml](examples.yml) which has some configuration for other services:
+   - [OpenProject](https://www.openproject.org/)
+   - TODO
+- for them to run, just copy the service you want to run, and insert it in the `docker-compose` file (and if necessary add additional env vars)
 
 ## Remarks
 
-- For testing, you can uncomment `--log.level=DEBUG` and `--certificatesresolvers.myresolver.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory` in the docker-compose file. This is useful for debugging and because Let's Encrypt has a rate limit of 50 certificate requests per week. [Learn more about rate limits here](https://letsencrypt.org/docs/rate-limits/).
-- For the initial configuration of Vaultwarden and Wireguard, it is recommended to change the `IPALLOWLIST` environment variable to your public IP address (from where you SSH into) and then change it back after the configuration is complete.
-- For the initial configuration of Nextcloud, it is recommended to add the following labels so that the system can only be accessed from your IP address:
-   ```yaml
-   - "traefik.http.middlewares.test-ipallowlist.ipallowlist.sourcerange=your_public_ip"
-   - "traefik.http.routers.nextcloud.middlewares=test-ipallowlist@docker"
-   ```
-- Consider disabling signups in Vaultwarden after creating your account by setting `"signups_allowed": false` in the `data/vaultwarden/config.json` or visiting the admin page (`bitwarden.example.com/admin`).
-- It is recommended to use the version with [Crowdsec](https://www.crowdsec.net/) to enhance security.
+- For testing, uncomment `--log.level=DEBUG` and `--certificatesresolvers.myresolver.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory` lines in the docker-compose file. This is useful for debugging and because Let's Encrypt has a rate limit of 50 certificate requests per week. [more about rate limits here](https://letsencrypt.org/docs/rate-limits/).
+- For the initial configuration of Vaultwarden, Wireguard and Nextcloud, it is recommended to change the `IPALLOWLIST` environment var to your public IP address (from where you SSH into) and then change it back after the configuration is complete.
+- Consider disabling signups in Vaultwarden after creating your account by setting `"signups_allowed": false` in the `data/vaultwarden/config.json` or visiting the admin page (`bitwarden.<your_domain>/admin`).
+- right now traefik uses the HTTP challange for certificate validation ([more info](https://letsencrypt.org/docs/challenge-types/)), in case you want to change it to another challange (for example if you want to have wildcard certificates), look [here](https://doc.traefik.io/traefik/https/acme/).
+
+TODO
+- test config
+- check readme
+- add new services
