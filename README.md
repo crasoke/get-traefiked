@@ -16,8 +16,7 @@ All those services are behind a [Traefik](https://traefik.io/) reverse proxy, as
 
 ## Quickstart
 
-1. Insert the necessary A Records in your Domain DNS configuration ([more information](https://www.cloudflare.com/learning/dns/dns-records/dns-a-record/))
-   - for example:
+1. Insert the necessary A Records in your Domain DNS configuration ([more information](https://www.cloudflare.com/learning/dns/dns-records/dns-a-record/)), for example:
 
 | Subdomain               | Record Type | Value       | TTL   |
 |-------------------------|-------------|-------------|-------|
@@ -78,8 +77,3 @@ All those services are behind a [Traefik](https://traefik.io/) reverse proxy, as
 - For the initial configuration of Vaultwarden, Wireguard and Nextcloud, it is recommended to change the `IPALLOWLIST` environment var to your public IP address (from where you SSH into) and then change it back after the configuration is complete.
 - Consider disabling signups in Vaultwarden after creating your account by setting `"signups_allowed": false` in the `data/vaultwarden/config.json` or visiting the admin page (`bitwarden.<your_domain>/admin`).
 - right now traefik uses the HTTP challange for certificate validation ([more info](https://letsencrypt.org/docs/challenge-types/)), in case you want to change it to another challange (for example if you want to have wildcard certificates), look [here](https://doc.traefik.io/traefik/https/acme/).
-
-TODO
-- test config
-- check readme
-- add new services
